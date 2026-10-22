@@ -26,15 +26,15 @@
 
 OSDefineMetaClassAndStructors(PRODUCT_NAME, IOService)
 
-#if defined(__i386__)
 kauth_listener_t kauth_listener_vnode;
 extern "C" int kauth_callback(kauth_cred_t credential, void *idata, kauth_action_t action, uintptr_t arg0, uintptr_t arg1, uintptr_t arg2, uintptr_t arg3) {
-	kauth_unlisten_scope(kauth_listener_vnode);
-	ADDPR(config).policyInit("kauth_listen: " KAUTH_SCOPE_VNODE);
-	
+	if (action == KAUTH_VNODE_EXECUTE) {
+		kauth_unlisten_scope(kauth_listener_vnode);
+		ADDPR(config).policyInit("kauth_listen: " KAUTH_SCOPE_VNODE);
+	}
+
 	return KAUTH_RESULT_ALLOW;
 }
-#endif
 
 IOService *PRODUCT_NAME::probe(IOService *provider, SInt32 *score) {
 	setProperty("VersionInfo", kextVersion);
@@ -47,9 +47,8 @@ bool PRODUCT_NAME::start(IOService *provider) {
 		SYSLOG("init", "failed to start the parent");
 		return false;
 	}
-	
-#if defined(__i386__)
-	// Use a kauth listener on 32-bit platforms to detect root mount.
+
+	// Use a kauth listener to detect root mount.
 	if (ADDPR(config).startSuccess) {
 		kauth_listener_vnode = kauth_listen_scope(KAUTH_SCOPE_VNODE, kauth_callback, NULL);
 		if (!kauth_listener_vnode) {
@@ -57,7 +56,6 @@ bool PRODUCT_NAME::start(IOService *provider) {
 			return false;
 		}
 	}
-#endif
 
 	return ADDPR(config).startSuccess;
 }
@@ -281,7 +279,7 @@ bool Configuration::getBootArguments() {
 		installOrRecovery = entry->getProperty("boot-ramdmg-extents") != nullptr;
 		entry->release();
 	}
-	
+
 	if (!installOrRecovery) {
 		installOrRecovery |= checkKernelArgument("rp0");
 		installOrRecovery |= checkKernelArgument("rp");
@@ -320,14 +318,14 @@ bool Configuration::getBootArguments() {
 	if (isDisabled) {
 		SYSLOG("config", "found a disabling argument or no arguments, exiting");
 	} else {
-#if defined(__x86_64__)
+/*#if defined(__x86_64__)
 		// Decide on booter
 		if (!preferSlowMode) {
 			policyOps.mpo_cred_check_label_update_execve = reinterpret_cast<mpo_cred_check_label_update_execve_t *>(policyCredCheckLabelUpdateExecve);
 		} else {
 			policyOps.mpo_mount_check_remount = policyCheckRemount;
 		}
-#endif
+#endif*/
 	}
 
 	return !isDisabled;
@@ -353,12 +351,12 @@ bool Configuration::registerPolicy() {
 		}
 	}
 
-	if (!policy.registerPolicy()) {
+	/*if (!policy.registerPolicy()) {
 		SYSLOG("config", "failed to register the policy");
 		IOLockFree(policyLock);
 		policyLock = nullptr;
 		return false;
-	}
+	}*/
 #endif
 
 	startSuccess = true;
